@@ -13,14 +13,41 @@ private struct ColorItem {
     let name: String
 }
 
+private enum AppLanguage: String {
+    case ru
+    case en
+}
+
 final class ColorMixerViewController: UIViewController {
-    
     // MARK: - Properties
     private var selectedColors: [ColorItem] = []
     private var resultColor: UIColor = .white
+    private var resultEmptyText = "Добавьте цвета для смешивания"
     private var resultColorName: String {
-        "Результат: \(resultColor.accessibilityName)"
+        resultColor.accessibilityName
     }
+    
+    private var currentLanguage: AppLanguage = .ru {
+        didSet {
+            updateLanguage()
+        }
+    }
+    
+    private lazy var screenTitle: UILabel = {
+        let label = UILabel()
+        label.text = "Цветомешалка"
+        label.font = .systemFont(ofSize: 22, weight: .bold)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        return label
+    }()
+    
+    private lazy var languageSwitcher: UISegmentedControl = {
+        let switcher = UISegmentedControl(items: ["RU", "EN"])
+        switcher.selectedSegmentIndex = 0
+        switcher.addTarget(self, action: #selector(languageDidChange), for: .valueChanged)
+        switcher.translatesAutoresizingMaskIntoConstraints = false
+        return switcher
+    }()
     
     private lazy var colorPicker: UIColorPickerViewController = {
         let picker = UIColorPickerViewController()
@@ -32,8 +59,10 @@ final class ColorMixerViewController: UIViewController {
         let tableView = UITableView()
         tableView.dataSource = self
         tableView.delegate = self
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "ColorCell")
-        tableView.register(UITableViewCell.self, forCellReuseIdentifier: "ResultCell")
+        tableView.rowHeight = 120
+        tableView.separatorStyle = .none
+        tableView.allowsSelection = false
+        tableView.register(ColorCell.self, forCellReuseIdentifier: "ColorCell")
         tableView.translatesAutoresizingMaskIntoConstraints = false
         return tableView
     }()
@@ -82,7 +111,9 @@ extension ColorMixerViewController: UITableViewDataSource {
     }
     
     func createResultCell(for tableView: UITableView, at indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "ResultCell", for: indexPath)
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: "ColorCell", for: indexPath) as? ColorCell else { return UITableViewCell()
+        }
+        
         cell.selectionStyle = .none
         if selectedColors.isEmpty {
             configureEmptyResultCell(cell)
@@ -103,6 +134,7 @@ extension ColorMixerViewController: UITableViewDelegate {
         if editingStyle == .delete {
             selectedColors.remove(at: indexPath.row)
             tableView.deleteRows(at: [indexPath], with: .automatic)
+            mixColors()
             tableView.reloadSections(IndexSet(integer: 0), with: .automatic)
         }
     }
@@ -147,40 +179,61 @@ private extension ColorMixerViewController {
     
     func setupView() {
         view.backgroundColor = .white
+        view.addSubview(screenTitle)
         view.addSubview(colorTableView)
         view.addSubview(addColorButton)
+        view.addSubview(languageSwitcher)
     }
     
-    func configureEmptyResultCell(_ cell: UITableViewCell) {
-        cell.textLabel?.text = "Добавьте цвета для смешивания"
-        cell.backgroundColor = .white
-        cell.textLabel?.textColor = .black
+    func configureEmptyResultCell(_ cell: ColorCell) {
+        let viewModel = ColorCellViewModel(text: resultEmptyText, color: .white, isResultCell: true)
+        cell.configure(with: viewModel)
     }
     
-    func configureFilledResultCell(_ cell: UITableViewCell) {
-        cell.textLabel?.text = resultColorName
-        cell.backgroundColor = resultColor
-        cell.textLabel?.textColor = .white
+    func configureFilledResultCell(_ cell: ColorCell) {
+        let viewModel = ColorCellViewModel(text: resultColorName, color: resultColor, isResultCell: true)
+        cell.configure(with: viewModel)
     }
     
     func createColorCell(for tableView: UITableView, at indexPath: IndexPath) -> UITableViewCell {
-        let cell = tableView.dequeueReusableCell(withIdentifier: "ColorCell", for: indexPath)
+        guard let cell = tableView.dequeueReusableCell(withIdentifier: "ColorCell", for: indexPath) as? ColorCell else { return UITableViewCell()
+        }
         let colorItem = selectedColors[indexPath.row]
-        cell.textLabel?.text = colorItem.name
-        cell.backgroundColor = colorItem.color
-        cell.textLabel?.textColor = .white
+        let viewModel = ColorCellViewModel(text: colorItem.name, color: colorItem.color, isResultCell: false)
+        cell.configure(with: viewModel)
         return cell
+    }
+    
+    private func updateLanguage() {
+        switch currentLanguage {
+        case .ru:
+            addColorButton.setTitle("Добавить цвет", for: .normal)
+            screenTitle.text = "Цветомешалка"
+            resultEmptyText = "Добавьте цвета для смешивания"
+        case .en:
+            addColorButton.setTitle("Add Color", for: .normal)
+            screenTitle.text = "MixColors"
+            resultEmptyText = "Add colors for mix"
+        }
+
+        colorTableView.reloadData()
     }
     
     func setupConstraints() {
         NSLayoutConstraint.activate([
-            colorTableView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor),
-            colorTableView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            colorTableView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            screenTitle.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 16),
+            screenTitle.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            
+            languageSwitcher.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
+            languageSwitcher.centerYAnchor.constraint(equalTo: screenTitle.centerYAnchor),
+            
+            colorTableView.topAnchor.constraint(equalTo: screenTitle.bottomAnchor, constant: 16),
+            colorTableView.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor),
+            colorTableView.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor),
             colorTableView.bottomAnchor.constraint(equalTo: addColorButton.topAnchor, constant: -16),
             
-            addColorButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            addColorButton.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            addColorButton.leadingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.leadingAnchor, constant: 16),
+            addColorButton.trailingAnchor.constraint(equalTo: view.safeAreaLayoutGuide.trailingAnchor, constant: -16),
             addColorButton.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
             addColorButton.heightAnchor.constraint(equalToConstant: 50)
         ])
@@ -188,5 +241,9 @@ private extension ColorMixerViewController {
     
     @objc func addColorButtonTapped() {
         present(colorPicker, animated: true)
+    }
+    
+    @objc func languageDidChange() {
+        currentLanguage = languageSwitcher.selectedSegmentIndex == 0 ? .ru : .en
     }
 }
